@@ -1,0 +1,196 @@
+############### Segmented regression ############
+### take bulk 14C against aridity for example ###
+# Load required packages
+# Purpose: provide functions for plotting, segmented regression, and data handling
+library(ggplot2)
+library(viridis)
+library(segmented)
+library(readr)
+library(scales)
+library(tidyr)
+library(dplyr)
+library(extrafont)
+
+# Set the working directory
+# Purpose: specify the folder containing the input data and output figure
+setwd("/Users/wanghui/Desktop/Dryland")
+
+# Read the dataset
+# Purpose: import the CSV file into R
+data <- read.csv("14C-SOC_CO2_4.10.csv", header = TRUE, sep = ",")
+
+# Inspect the dataset
+# Purpose: check that the data were imported correctly
+data
+
+# Fit the initial linear regression model
+# Purpose: provide the base model for segmented regression
+model <- lm(bulk ~ Aridity, data = data)
+
+# Test for a significant change in slope
+# Purpose: assess whether a breakpoint is statistically supported
+davies_test <- davies.test(model, seg.Z = ~ Aridity)
+davies_test
+
+# Fit a segmented regression with one automatically estimated breakpoint
+# Purpose: estimate the threshold (breakpoint) in the relationship between Aridity and bulk
+my.seg <- segmented(
+  model,
+  seg.Z = ~ Aridity,
+  npsi = 1,
+  control = seg.control(quant = TRUE)
+)
+
+# View the segmented model summary
+# Purpose: inspect the estimated breakpoint and model coefficients
+summary(my.seg)
+
+# Extract the estimated breakpoint
+# Purpose: obtain the threshold value for plotting and annotation
+breakpt <- as.numeric(my.seg$psi[, 2])
+breakpt
+
+# Create a smooth sequence of Aridity values for prediction
+# Purpose: generate a smooth fitted segmented line
+new_aridity <- data.frame(
+  Aridity = seq(min(data$Aridity), max(data$Aridity), length.out = 200)
+)
+
+# Predict fitted values and 95% confidence intervals from the segmented model
+# Purpose: create the fitted curve and its confidence band for plotting
+preds <- predict(my.seg, newdata = new_aridity, interval = "confidence")
+
+# Build a data frame for the fitted line and confidence interval
+# Purpose: organize model predictions for ggplot
+plot_model <- data.frame(
+  Aridity = new_aridity$Aridity,
+  bulk_fit = preds[, "fit"],
+  lower = preds[, "lwr"],
+  upper = preds[, "upr"]
+)
+
+# Calculate the overall R-squared for the segmented model
+# Purpose: quantify the proportion of variation in bulk explained by the segmented regression
+ss_total <- sum((data$bulk - mean(data$bulk))^2)
+ss_residual <- sum((data$bulk - fitted(my.seg))^2)
+r_squared <- 1 - ss_residual / ss_total
+r_squared
+
+# Create a text label for R-squared
+# Purpose: display the model fit directly on the figure
+r_squared_label <- paste0("italic(R)^2 == ", round(r_squared, 2))
+
+# Create a text label for the breakpoint
+# Purpose: display the estimated threshold directly on the figure
+break_label <- paste0("Aridity = ", round(breakpt, 2))
+
+# Create the plot
+# Purpose: show observed data, segmented fit, confidence interval, and breakpoint
+p1 <- ggplot(data, aes(x = Aridity, y = bulk)) +
+  
+  # Plot individual observations
+  # Purpose: show the raw data points, with point fill representing MAT
+  geom_point(
+    aes(fill = MAT),
+    size = 6,
+    shape = 21,
+    color = "black",
+    alpha = 0.8
+  ) +
+  
+  # Add axis labels
+  # Purpose: define the x- and y-axis labels
+  labs(
+    x = "Aridity",
+    y = expression("bulk " * Delta^14 * "C (‰)")
+  ) +
+  
+  # Set axis ranges
+  # Purpose: control the visible plotting range
+  scale_x_continuous(limits = c(0.42, 1)) +
+  scale_y_continuous(limits = c(-450, 50)) +
+  
+  # Apply a viridis fill scale for MAT
+  # Purpose: map MAT values to point fill colors
+  scale_fill_viridis_c(name = "MAT", option = "inferno", alpha = 0.9) +
+  
+  # Apply a clean theme
+  # Purpose: simplify the figure appearance
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),  # Remove grid lines
+    panel.border = element_rect(color = "black", fill = NA, size = 1.2),  # Add black border
+    axis.text.x = element_text(size = 16, color = "black", family = "Arial Unicode MS"),  # Style x-axis tick labels
+    axis.text.y = element_text(size = 16, color = "black", family = "Arial Unicode MS"),  # Style y-axis tick labels
+    axis.title.x = element_text(size = 18, color = "black", family = "Arial Unicode MS"), # Style x-axis title
+    axis.title.y = element_text(size = 18, color = "black", family = "Arial Unicode MS"), # Style y-axis title
+    text = element_text(size = 19, family = "Arial Unicode MS", color = "black"),         # Style all text
+    axis.ticks = element_line(color = "black"),                                             # Add tick marks
+    axis.ticks.length = unit(0.2, "cm"),                                                    # Set tick length
+    legend.position = "none"                                                                # Hide legend
+  ) +
+  
+  # Add the 95% confidence interval ribbon
+  # Purpose: display uncertainty around the fitted segmented line
+  geom_ribbon(
+    data = plot_model,
+    aes(x = Aridity, ymin = lower, ymax = upper),
+    inherit.aes = FALSE,
+    fill = "gray",
+    alpha = 0.4
+  ) +
+  
+  # Add the estimated breakpoint as a vertical dashed line
+  # Purpose: mark the threshold where the slope changes
+  geom_vline(
+    xintercept = breakpt,
+    linetype = "dashed",
+    color = "#781C6DFF"
+  ) +
+  
+  # Add the fitted segmented regression line
+  # Purpose: show the modeled relationship between Aridity and bulk
+  geom_line(
+    data = plot_model,
+    aes(x = Aridity, y = bulk_fit),
+    color = "#781C6DFF",
+    size = 1.2
+  ) +
+  
+  # Annotate the estimated breakpoint
+  # Purpose: label the threshold value on the plot
+  annotate(
+    "text",
+    x = breakpt,
+    y = 40,
+    label = break_label,
+    color = "black",
+    size = 5,
+    hjust = -0.05
+  ) +
+  
+  # Annotate the R-squared value
+  # Purpose: label the model fit on the plot
+  annotate(
+    "text",
+    x = 0.5,
+    y = 40,
+    label = r_squared_label,
+    parse = TRUE,
+    size = 6
+  )
+
+# Display the plot
+# Purpose: show the final figure in the plotting window
+p1
+
+# Save the figure as a PDF
+# Purpose: export the final figure for manuscript use
+ggsave(
+  "bulk 14C_aridity.pdf",
+  plot = p1,
+  width = 6.24,
+  height = 5.80,
+  units = "in",
+  device = cairo_pdf
+)
