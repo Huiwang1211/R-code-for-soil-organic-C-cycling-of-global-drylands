@@ -1,4 +1,4 @@
-########### linear mixed-effects regression models ########### 
+########### For linear mixed-effects regression models ########### 
 
 # Load required packages
 # Purpose: provide functions for plotting, mixed models, data manipulation, and model evaluation
