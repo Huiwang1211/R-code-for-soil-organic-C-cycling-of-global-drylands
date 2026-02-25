@@ -17,7 +17,7 @@ setwd("/Users/wanghui/Desktop/Dryland")
 
 # Read the dataset
 # Purpose: import the CSV file into R
-data <- read.csv("14C-SOC_CO2_4.10.csv", header = TRUE, sep = ",")
+data <- read.csv("14C data.csv", header = TRUE, sep = ",")
 
 # Inspect the dataset
 # Purpose: check that the data were imported correctly
