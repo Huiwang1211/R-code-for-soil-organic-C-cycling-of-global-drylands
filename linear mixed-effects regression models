@@ -1,0 +1,182 @@
+########### linear mixed-effects regression models ########### 
+
+# Load required packages
+# Purpose: provide functions for plotting, mixed models, data manipulation, and model evaluation
+library(ggplot2)
+library(lme4)
+library(dplyr)
+library(lmerTest)
+library(car)
+library(MuMIn)
+
+# Set working directory
+# Purpose: define the folder containing the input file and output figure
+setwd("/Users/wanghui/Desktop/Dryland")
+
+# Read the dataset
+# Purpose: import the CSV file into R
+Data <- read.csv("14C data.csv", header = TRUE, sep = ",")
+
+# Optional filtering step
+# Purpose: remove observations with high fSIC if needed
+# Data <- Data %>% 
+#   filter(fsic <= 0.1)
+
+# Inspect the data structure
+# Purpose: check variable types before preprocessing
+str(Data)
+
+# Standardize all numeric columns
+# Purpose: scale all numeric variables, including the response variable and any numeric grouping variable
+numeric_columns <- sapply(Data, is.numeric)
+Data_scaled_numeric <- as.data.frame(scale(Data[, numeric_columns]))
+
+# Keep non-numeric columns unchanged
+# Purpose: preserve categorical/text variables
+Data_non_numeric <- Data[, !numeric_columns]
+
+# Combine scaled numeric and original non-numeric columns
+# Purpose: create the final analysis dataset
+Data_scaled <- cbind(Data_scaled_numeric, Data_non_numeric)
+data_imputed <- Data_scaled
+
+# Fit the linear mixed-effects model
+# Purpose: test how environmental and soil predictors explain difference in bulk 14C and respired CO2
+#          change 'delta' to 'bulk' and 'respired CO2' in the following similar analyses
+Result_final1 <- lmer(
+  delta ~ Aridity + MAT + NPP + plant_cover + richness +
+    SOC + pH + clay_silt + Fe_Al + CO2_respired.rate +
+    (1 | Transect),
+  data = data_imputed
+)
+
+# Check whether the model is singular
+# Purpose: assess whether the random-effect variance is estimated near zero
+isSingular(Result_final1)
+
+# View model summary
+# Purpose: inspect fixed effects, random effects, standard errors, t values, and P values
+summary(Result_final1)
+
+# Check residual normality visually
+# Purpose: assess whether residuals approximately follow a normal distribution
+qqnorm(residuals(Result_final1))
+qqline(residuals(Result_final1), col = "red", lwd = 2)
+
+# Shapiro-Wilk normality test
+# Purpose: test whether model residuals deviate from normality
+shapiro.test(residuals(Result_final1))
+
+# Check multicollinearity
+# Purpose: evaluate whether predictors are strongly correlated
+vif_values <- vif(Result_final1)
+print(vif_values)
+
+# Calculate R-squared for the mixed model
+# Purpose: quantify variance explained by fixed effects and by the full model
+r.squaredGLMM(Result_final1)
+
+# View model summary again if needed
+summary(Result_final1)
+
+# Extract fixed-effect coefficients and standard errors
+# Purpose: prepare data for the coefficient plot
+coef_values1 <- fixef(Result_final1)
+se_values1 <- summary(Result_final1)$coefficients[, "Std. Error"]
+var_names1 <- names(coef_values1)
+
+# Create a data frame for plotting
+# Purpose: store model coefficients and uncertainty estimates
+forest_data1 <- data.frame(
+  var_names = var_names1,
+  coef_values = coef_values1,
+  se_values = se_values1
+)
+
+# Remove the intercept
+# Purpose: display only predictor effects in the plot
+forest_data_filtered <- subset(forest_data1, var_names != "(Intercept)")
+
+# Rename variables for cleaner labels
+# Purpose: improve readability in the final figure
+forest_data_filtered$var_names <- as.character(forest_data_filtered$var_names)
+forest_data_filtered$var_names[forest_data_filtered$var_names == "plant_cover"] <- "Plant cover"
+forest_data_filtered$var_names[forest_data_filtered$var_names == "richness"] <- "Spec.richness"
+forest_data_filtered$var_names[forest_data_filtered$var_names == "clay_silt"] <- "Clay+silt"
+forest_data_filtered$var_names[forest_data_filtered$var_names == "Fe_Al"] <- "Fe+Al"
+forest_data_filtered$var_names[forest_data_filtered$var_names == "CO2_respired.rate"] <- "Resp.rate"
+forest_data_filtered$var_names[forest_data_filtered$var_names == "Prec_season"] <- "Prec.variability"
+
+# Set the display order of variables
+# Purpose: arrange predictors in a meaningful order for plotting
+forest_data_filtered$var_names <- factor(
+  forest_data_filtered$var_names,
+  levels = c("Resp.rate", "Fe+Al", "Clay+silt", "pH", "TN", "SOC",
+             "Spec.richness", "Plant cover", "NPP",
+             "MAT","Aridity")
+)
+
+# Create the coefficient plot
+# Purpose: visualize the direction and magnitude of predictor effects
+ggplot(forest_data_filtered, aes(x = coef_values, y = var_names)) +
+  # Add one-sided error bars
+  # Purpose: show the one-sided 95% confidence interval for each coefficient
+  geom_errorbarh(
+    aes(
+      xmin = ifelse(var_names %in% c("Aridity","Plant cover", "Spec.richness", "pH", "Fe+Al"),
+                    coef_values,
+                    coef_values - 1.96 * se_values),
+      xmax = ifelse(var_names %in% c("Aridity","Plant cover", "Spec.richness", "pH", "Fe+Al"),
+                    coef_values + 1.96 * se_values,
+                    coef_values)
+    ),
+    height = 0.2, size = 0.7, color = "black"
+  ) +
+  # Add a vertical reference line at zero
+  # Purpose: indicate no effect
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray", size = 0.8) +
+  # Add bars for coefficients
+  # Purpose: show the sign and magnitude of each coefficient
+  geom_bar(stat = "identity", aes(fill = var_names), width = 0.6, color = "black") +
+  # Add axis labels and title
+  labs(
+    title = expression("difference in " * Delta^14 * "C"),
+    x = "Coefficient",
+    y = "Predictors"
+  ) +
+  # Define colors by predictor group
+  scale_fill_manual(values = c(
+    "Resp.rate" = "#E8E227",
+    "Fe+Al" = "#E8E227",
+    "Clay+silt" = "#E8E227",
+    "pH" = "#E8E227",
+    "SOC" = "#E8E227",
+    "Spec.richness" = "#29AF7F",
+    "Plant cover" = "#29AF7F",
+    "NPP" = "#29AF7F",
+    "MAT" = "#664A89",
+    "Aridity" = "#664A89"
+  )) +
+  # Set x-axis range
+  scale_x_continuous(limits = c(-0.8, 0.8)) +
+  # Style the plot
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.background = element_rect(fill = "white"),
+    axis.text.x = element_text(size = 14, color = "black"),
+    axis.text.y = element_text(size = 14, color = "black"),
+    axis.title.x = element_text(size = 14, color = "black"),
+    axis.title.y = element_text(size = 14, color = "black"),
+    plot.title = element_text(size = 16, hjust = 0.5),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "none",
+    axis.ticks = element_line(color = "black"),
+    axis.ticks.length = unit(0.2, "cm"),
+    panel.border = element_rect(color = "black", fill = NA, size = 1.2)
+  )
+
+# Save the figure as a PDF
+# Purpose: export the final figure for manuscript use
+ggsave("difference in 14C.pdf", width = 5, height = 6, device = "pdf")
