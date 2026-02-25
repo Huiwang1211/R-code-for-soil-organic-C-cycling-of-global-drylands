@@ -20,7 +20,7 @@ Data <- read.csv("14C data.csv", header = TRUE, sep = ",")
 # Optional filtering step
 # Purpose: remove observations with high fSIC if needed
 # Data <- Data %>% 
-#   filter(fsic <= 0.1)
+#   filter(fsic <= 0.15)
 
 # Inspect the data structure
 # Purpose: check variable types before preprocessing
