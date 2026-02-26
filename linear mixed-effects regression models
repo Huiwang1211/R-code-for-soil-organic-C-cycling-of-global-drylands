@@ -79,6 +79,33 @@ r.squaredGLMM(Result_final1)
 # View model summary again if needed
 summary(Result_final1)
 
+
+# Additional diagnostic plots for the linear mixed-effects model
+# Purpose: visually assess model assumptions, including residual patterns and random-effect distribution
+
+# Load package for model diagnostics
+# Purpose: provide functions for checking residuals, linearity, homogeneity, and random effects
+library(performance)
+
+# Plot residuals versus fitted values
+# Purpose: check linearity and homoscedasticity (constant variance)
+plot(fitted(Result_final1), residuals(Result_final1),
+     xlab = "Fitted values",
+     ylab = "Residuals",
+     pch = 16, col = "black")
+abline(h = 0, col = "red", lwd = 2)
+
+# Add a lowess smooth line
+# Purpose: help detect systematic patterns in residuals
+lines(lowess(fitted(Result_final1), residuals(Result_final1)),
+      col = "blue", lwd = 2)
+
+# QQ plot of random intercepts
+# Purpose: check whether the random effects are approximately normally distributed
+qqnorm(ranef(Result_final1)$Transect[, 1],
+       main = "Q-Q plot of random intercepts (Transect)")
+qqline(ranef(Result_final1)$Transect[, 1], col = "red", lwd = 2)
+
 # Extract fixed-effect coefficients and standard errors
 # Purpose: prepare data for the coefficient plot
 coef_values1 <- fixef(Result_final1)
@@ -105,13 +132,12 @@ forest_data_filtered$var_names[forest_data_filtered$var_names == "richness"] <- 
 forest_data_filtered$var_names[forest_data_filtered$var_names == "clay_silt"] <- "Clay+silt"
 forest_data_filtered$var_names[forest_data_filtered$var_names == "Fe_Al"] <- "Fe+Al"
 forest_data_filtered$var_names[forest_data_filtered$var_names == "CO2_respired.rate"] <- "Resp.rate"
-forest_data_filtered$var_names[forest_data_filtered$var_names == "Prec_season"] <- "Prec.variability"
 
 # Set the display order of variables
 # Purpose: arrange predictors in a meaningful order for plotting
 forest_data_filtered$var_names <- factor(
   forest_data_filtered$var_names,
-  levels = c("Resp.rate", "Fe+Al", "Clay+silt", "pH", "TN", "SOC",
+  levels = c("Resp.rate", "Fe+Al", "Clay+silt", "pH", "SOC",
              "Spec.richness", "Plant cover", "NPP",
              "MAT","Aridity")
 )
